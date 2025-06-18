@@ -40,6 +40,7 @@ private:
     VideoPlayer *mPlayer;                  //播放线程
 
     QImage mImage;                         //记录当前的图像
+    QImage mCachedImage;   // 缓存缩放后的图像
     QImage R_mImage;                       //2017.8.11---lizhen
 
     QString url; 

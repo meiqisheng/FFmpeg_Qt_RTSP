@@ -1,45 +1,54 @@
-﻿/**
- * 李震
- * 我的码云：https://git.oschina.net/git-lizhen
- * 我的CSDN博客：http://blog.csdn.net/weixin_38215395
- * 联系：QQ1039953685
- */
-
-#ifndef VIDEOPLAYER_H
+﻿#ifndef VIDEOPLAYER_H
 #define VIDEOPLAYER_H
 
 #include <QThread>
 #include <QImage>
+#include <QAudioOutput>
+#include <QMutex>
 
-//2017.8.10---lizhen
-class VlcInstance;
-class VlcMedia;
-class VlcMediaPlayer;
+extern "C" {
+    #include <libavcodec/avcodec.h>
+    #include <libavformat/avformat.h>
+    #include <libavutil/avutil.h>
+    #include <libavutil/imgutils.h>
+    #include <libswscale/swscale.h>
+    #include <libswresample/swresample.h>
+}
 
 class VideoPlayer : public QThread
 {
     Q_OBJECT
 
 public:
-    explicit VideoPlayer();
+    explicit VideoPlayer(QObject *parent = nullptr);
     ~VideoPlayer();
 
     void startPlay();
+    void stopPlay();
 
 signals:
-    void sig_GetOneFrame(QImage); //每获取到一帧图像 就发送此信号
-    void sig_GetRFrame(QImage);   ///2017.8.11---lizhen
+    void sig_GetOneFrame(QImage);
+    void sig_GetRFrame(QImage);
 
 protected:
-    void run();
+    void run() override;
 
 private:
     QString mFileName;
+    bool mStopRequested;
+    QMutex mStopMutex;
 
-    //2017.8.10---lizhen
-    VlcInstance *_instance;
-    VlcMedia *_media;
-    VlcMediaPlayer *_player;
+    // 音频相关成员
+    QAudioOutput *mAudioOutput;
+    QIODevice *mAudioIO;
+    SwrContext *mSwrCtx;
+    AVSampleFormat mDstSampleFmt;
+
+    void initAudio();
+    void cleanupAudio();
+    void processAudioPacket(AVCodecContext *audioCodecCtx, AVPacket *packet);
+
+private slots:
+    void playAudioData(const QByteArray &audioData);
 };
-
 #endif // VIDEOPLAYER_H

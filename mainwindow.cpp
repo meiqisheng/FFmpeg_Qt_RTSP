@@ -24,9 +24,8 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     mPlayer = new VideoPlayer;
-    connect(mPlayer,SIGNAL(sig_GetOneFrame(QImage)),this,SLOT(slotGetOneFrame(QImage)));
-    //2017.8.11---lizhen
-    connect(mPlayer,SIGNAL(sig_GetRFrame(QImage)),this,SLOT(slotGetRFrame(QImage)));
+    connect(mPlayer, &VideoPlayer::sig_GetOneFrame, this, &MainWindow::slotGetOneFrame);
+    connect(mPlayer, &VideoPlayer::sig_GetRFrame, this, &MainWindow::slotGetRFrame);
     //2017.8.12---lizhen
     connect(ui->Open_red,&QAction::triggered,this,&MainWindow::slotOpenRed);
     connect(ui->Close_Red,&QAction::triggered,this,&MainWindow::slotCloseRed);
@@ -40,54 +39,11 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::paintEvent(QPaintEvent *event)
-{
-    QPainter painter(this);
-
-    painter.setBrush(Qt::white);
-    painter.drawRect(0, 0, this->width(), this->height()); //先画成白色
-
-    if (mImage.size().width() <= 0) return;
-
-    //将图像按比例缩放成和窗口一样大小
-    QImage img = mImage.scaled(this->size(),Qt::KeepAspectRatio);
-
-    int x = this->width() - img.width();
-    int y = this->height() - img.height();
-
-    x /= 2;
-    y /= 2;
-
-    painter.drawImage(QPoint(x,y),img); //画出图像
-
-    if(open_red==true){
-    //2017.8.12
-    QWidget *red_video=new QWidget(this);
-    red_video->resize(this->width()/3,this->height()/3);
-    //2017.8.11---lizhen
-    //提取出图像中的R数据
-    painter.setBrush(Qt::white);
-    painter.drawRect(0, 0, red_video->width(),red_video->height()); //先画成白色
-
-    if (R_mImage.size().width() <= 0) return;
-
-    //将图像按比例缩放成和窗口一样大小
-    QImage R_img = R_mImage.scaled(red_video->size(),Qt::KeepAspectRatio);
-
-    int R_x = red_video->width() - R_img.width();
-    int R_y = red_video->height() - R_img.height();
-
-    R_x /= 2;
-    R_y /= 2;
-
-    painter.drawImage(QPoint(R_x,R_y),R_img);  //画出图像
-    }
-}
-
-void MainWindow::slotGetOneFrame(QImage img)
-{
+// mainwindow.cpp
+void MainWindow::slotGetOneFrame(QImage img) {
     mImage = img;
-    update(); //调用update将执行 paintEvent函数
+    mCachedImage = QImage(); // 清空缓存，下次paintEvent重新缩放
+    update();
 }
 //2017.10.10，显示二值图像
 QImage Indentificate(QImage image)
@@ -135,5 +91,24 @@ bool MainWindow::slotCloseRed()
     return open_red;
 }
 
+// videoplayer.cpp
+void VideoPlayer::playAudioData(const QByteArray &audioData)
+{
+    if (mAudioIO) {
+        mAudioIO->write(audioData);
+    }
+}
 
+void MainWindow::paintEvent(QPaintEvent*) {
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
 
+    if (!mImage.isNull()) {
+        if (mCachedImage.isNull()) {
+            mCachedImage = mImage.scaled(size(), Qt::KeepAspectRatio, Qt::FastTransformation);
+        }
+        painter.drawImage((width() - mCachedImage.width())/2,
+                         (height() - mCachedImage.height())/2,
+                         mCachedImage);
+    }
+}
