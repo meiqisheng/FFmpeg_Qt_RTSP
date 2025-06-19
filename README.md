@@ -7,7 +7,8 @@
 - 支持二值化图像处理（实验性功能）
 - 小窗口显示红色通道画面
 
-源码是：https://github.com/VideosWorks/FFmpeg-QT-RTSP，本人在此基础上进行修改。
+源码是：https://github.com/VideosWorks/FFmpeg-QT-RTSP
+本人在此基础上进行修改。
 
 ![demo](./黄油.gif) <!-- 放置你的视频或波形演示动图 -->
 
