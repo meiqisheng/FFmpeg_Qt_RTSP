@@ -128,10 +128,10 @@ void VideoPlayer::run()
     SwsContext *img_convert_ctx = nullptr;
 
     int videoStream = -1, audioStream = -1;
-
+    QByteArray urlData1 = m_transport.toUtf8();
     // 打开RTSP流
     AVDictionary *options = nullptr;
-    av_dict_set(&options, "rtsp_transport", "tcp", 0);
+    av_dict_set(&options, "rtsp_transport", urlData1, 0);
     av_dict_set(&options, "max_delay", "100", 0);
 
     //const char *url = mStreamUrl.toUtf8().constData();
@@ -385,4 +385,9 @@ void VideoPlayer::stopPushing() {
         }
     }
     mIsPushing = false;
+}
+
+// videoplayer.cpp
+void VideoPlayer::setTransportProtocol(const QString &protocol) {
+    m_transport = protocol.toLower(); // 确保是小写
 }

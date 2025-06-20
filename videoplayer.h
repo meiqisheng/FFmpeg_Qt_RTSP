@@ -29,6 +29,7 @@ public:
     void setStreamUrl(const QString &url);  // 新增方法
     void startPushing(const QString &inputUrl, const QString &outputUrl); // 新增推流方法
     void stopPushing(); // 停止推流
+    void setTransportProtocol(const QString &protocol); // 新增方法
 
 signals:
     void sig_GetOneFrame(QImage);
@@ -58,6 +59,7 @@ private:
     QString mStreamUrl;  // 存储流地址
     bool mIsPushing;
     QProcess *mFFmpegProcess = nullptr; // 用于调用FFmpeg命令行推流
+    QString m_transport; // 存储传输协议 ("tcp" 或 "udp")
 
 private slots:
     void playAudioData(const QByteArray &audioData);

@@ -26,6 +26,7 @@ MainWindow::MainWindow(QWidget *parent) :
 { 
 	
     ui->setupUi(this);
+    ui->comboBox->setCurrentIndex(0); // 默认选中 TCP
     QString title = QString("RTSP tool - Version %1, build:%2-%3").arg(APP_VERSION).arg(__DATE__).arg(__TIME__);
     this->setWindowTitle(title);
     mPlayer = new VideoPlayer;
@@ -150,9 +151,12 @@ void MainWindow::onPullStreamClicked(bool checked)
             return;
         }
 
+        // 获取用户选择的协议 (TCP/UDP)
+        QString transport = ui->comboBox->currentText().toLower();
         ui->pullstreamButton->setText("停止拉流");
         mPlayer->stopPlay();
         mPlayer->setStreamUrl(rtspUrl);
+        mPlayer->setTransportProtocol(transport); // 设置传输协议
         mPlayer->startPlay();
     } else {
         // 停止拉流
