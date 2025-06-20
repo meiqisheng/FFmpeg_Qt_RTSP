@@ -284,23 +284,27 @@ void VideoPlayer::startPushing(const QString &inputUrl, const QString &outputUrl
             emit sig_PushStatus(output.trimmed());
         });
 
-        // 进程结束处理（自动重启逻辑）
+        // 修改 finished 回调
         connect(mFFmpegProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [this, inputUrl, outputUrl](int code, QProcess::ExitStatus status) {
                 mIsPushing = false;
-                QString exitMsg = QString("推流进程结束，代码: %1").arg(code);
-                emit sig_PushStatus(exitMsg);
+                if (code == 0) {
+                    mRetryCount = 0; // 重置计数器
+                    return;
+                }
 
-                // 正常退出不重启（0表示成功退出）
-                if (code == 0) return;
-
-                // 异常退出时自动重启
-                emit sig_PushStatus("检测到异常中断，3秒后尝试重启...");
-                QTimer::singleShot(3000, this, [this, inputUrl, outputUrl]() {
-                    if (!mIsPushing) { // 防止重复启动
-                        startPushing(inputUrl, outputUrl);
-                    }
-                });
+                if (mRetryCount < 3) {
+                    mRetryCount++;
+                    emit sig_PushStatus(QString("第 %1 次重试...").arg(mRetryCount));
+                    QTimer::singleShot(3000, this, [this, inputUrl, outputUrl]() {
+                        if (!mIsPushing) {
+                            startPushing(inputUrl, outputUrl);
+                        }
+                    });
+                } else {
+                    emit sig_PushStatus("超过最大重试次数，停止推流");
+                    emit sig_RequireButtonReset(); // 通知UI重置按钮状态
+                }
             });
 
         // 构建FFmpeg参数
@@ -377,14 +381,22 @@ void VideoPlayer::startPushing(const QString &inputUrl, const QString &outputUrl
 
 // 停止推流的函数
 void VideoPlayer::stopPushing() {
-    if (mFFmpegProcess && mFFmpegProcess->state() == QProcess::Running) {
-        // 先尝试正常终止
+    if (mFFmpegProcess) {
+        disconnect(mFFmpegProcess, nullptr, this, nullptr); // 断开所有信号
+
+        // 优雅终止
         mFFmpegProcess->terminate();
-        if (!mFFmpegProcess->waitForFinished(1000)) {
+        if (!mFFmpegProcess->waitForFinished(3000)) {
             mFFmpegProcess->kill();
+            mFFmpegProcess->waitForFinished();
+            qWarning() << "FFmpeg 被强制终止";
         }
+
+        mFFmpegProcess->deleteLater();
+        mFFmpegProcess = nullptr;
     }
     mIsPushing = false;
+    emit sig_PushStatus("推流已停止");
 }
 
 // videoplayer.cpp

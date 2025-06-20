@@ -60,6 +60,7 @@ private:
     bool mIsPushing;
     QProcess *mFFmpegProcess = nullptr; // 用于调用FFmpeg命令行推流
     QString m_transport; // 存储传输协议 ("tcp" 或 "udp")
+    int mRetryCount = 0;
 
 private slots:
     void playAudioData(const QByteArray &audioData);
