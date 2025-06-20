@@ -13,6 +13,22 @@
 ---
 ![demo2](./output1.gif) <!-- 放置你的视频或波形演示动图 -->
 
+## 📡 Public RTSP Test Streams (Verified)
+
+The following RTSP streams are available for testing purposes. Note that public streams may become unavailable without notice.
+
+| Location            | RTSP URL                                      | Latency | Status       |
+|---------------------|-----------------------------------------------|---------|--------------|
+| Nordland            | `rtsp://77.110.228.219/axis-media/media.amp` | 200ms   | ✅ Working   |
+| Norwich             | `rtsp://37.157.51.30/axis-media/media.amp`   | 250ms   | ✅ Working   |
+| Orlando             | `rtsp://97.68.104.34/axis-media/media.amp`   | 350ms   | ⚠️ Unstable |
+| PriceCenterPlaza    | `rtsp://132.239.12.145:554/axis-media/media.amp` | 280ms | ✅ Working   |
+| Vaison-La-Romaine   | `rtsp://176.139.87.16/axis-media/media.amp`  | -       | ❌ Offline   |
+| VyhladJazero        | `rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream` | 160ms | ✅ Working |
+| Western Cape        | `rtsp://196.21.92.82/axis-media/media.amp`   | 450ms   | ⚠️ High Latency |
+| Zeeland             | `rtsp://213.34.225.97/axis-media/media.amp`  | 270ms   | ✅ Working   |
+| Allendale           | `rtsp://71.83.5.156/axis-media/media.amp`    | 270ms   | ✅ Working   |
+| Bedford Hills       | `rtsp://73.114.177.111/axis-media/media.amp` | 340ms   | ✅ Working   |
 
 ## 功能特性
 1. **播放器功能**：
