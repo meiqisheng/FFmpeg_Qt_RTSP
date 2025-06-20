@@ -12,6 +12,8 @@
 #include <QPainter>
 #include <QInputDialog>
 #include <QtMath>
+#include <QtWidgets/QMessageBox>
+#include <QTimer>
 
 #include<iostream>
 using namespace std;
@@ -24,13 +26,18 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
 
     mPlayer = new VideoPlayer;
+    this->setWindowFlags(Qt::Widget | Qt::MSWindowsFixedSizeDialogHint);
     connect(mPlayer, &VideoPlayer::sig_GetOneFrame, this, &MainWindow::slotGetOneFrame);
+    connect(ui->pullstreamButton, &QPushButton::toggled, this, &MainWindow::onPullStreamClicked);
     connect(mPlayer, &VideoPlayer::sig_GetRFrame, this, &MainWindow::slotGetRFrame);
     //2017.8.12---lizhen
     connect(ui->Open_red,&QAction::triggered,this,&MainWindow::slotOpenRed);
     connect(ui->Close_Red,&QAction::triggered,this,&MainWindow::slotCloseRed);
+    connect(mPlayer, &VideoPlayer::sig_StreamError, this, &MainWindow::onStreamError);
+    // mainwindow.cpp
+    connect(mPlayer, &VideoPlayer::sig_RequireButtonReset, this, &MainWindow::onPushButtonReset);
 
-    mPlayer->startPlay();
+    //mPlayer->startPlay();
 
 }
 
@@ -39,12 +46,12 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-// mainwindow.cpp
-void MainWindow::slotGetOneFrame(QImage img) {
-    mImage = img;
-    mCachedImage = QImage(); // 清空缓存，下次paintEvent重新缩放
-    update();
-}
+//// mainwindow.cpp
+//void MainWindow::slotGetOneFrame(QImage img) {
+//    mImage = img;
+//    mCachedImage = QImage(); // 清空缓存，下次paintEvent重新缩放
+//    update();
+//}
 //2017.10.10，显示二值图像
 QImage Indentificate(QImage image)
 {
@@ -99,16 +106,89 @@ void VideoPlayer::playAudioData(const QByteArray &audioData)
     }
 }
 
-void MainWindow::paintEvent(QPaintEvent*) {
-    QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+//void MainWindow::paintEvent(QPaintEvent*) {
+//    QPainter painter(this);
+//    painter.fillRect(rect(), Qt::black);
 
-    if (!mImage.isNull()) {
-        if (mCachedImage.isNull()) {
-            mCachedImage = mImage.scaled(size(), Qt::KeepAspectRatio, Qt::FastTransformation);
+//    if (!mImage.isNull()) {
+//        if (mCachedImage.isNull()) {
+//            mCachedImage = mImage.scaled(size(), Qt::KeepAspectRatio, Qt::FastTransformation);
+//        }
+//        painter.drawImage((width() - mCachedImage.width())/2,
+//                         (height() - mCachedImage.height())/2,
+//                         mCachedImage);
+//    }
+//}
+// 修改slot函数
+void MainWindow::slotGetOneFrame(QImage img)
+{
+    mCachedImage = QPixmap::fromImage(img);
+    updateVideoLabel();
+}
+
+void MainWindow::updateVideoLabel()
+{
+    QSize labelSize = ui->videoLabel->size();
+    ui->videoLabel->setPixmap(mCachedImage.scaled(
+        labelSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+// 新增槽函数
+// 修改拉流按钮的槽函数
+// 修改后的槽函数
+void MainWindow::onPullStreamClicked(bool checked)
+{
+    if (checked) {
+        // 开始拉流
+        QString rtspUrl = ui->pullEdit->text().trimmed();
+        if (rtspUrl.isEmpty()) {
+            QMessageBox::warning(this, "输入错误", "RTSP URL不能为空！");
+            ui->pullstreamButton->setChecked(false);
+            return;
         }
-        painter.drawImage((width() - mCachedImage.width())/2,
-                         (height() - mCachedImage.height())/2,
-                         mCachedImage);
+
+        ui->pullstreamButton->setText("停止拉流");
+        mPlayer->stopPlay();
+        mPlayer->setStreamUrl(rtspUrl);
+        mPlayer->startPlay();
+    } else {
+        // 停止拉流
+        ui->pullstreamButton->setText("开始拉流");
+        mPlayer->stopPlay();
     }
 }
+
+// 错误处理槽函数
+void MainWindow::onStreamError(const QString &errorMsg) {
+    QMessageBox::critical(this, "Stream Error", errorMsg);
+}
+
+void MainWindow::on_pushstreamButton_clicked(bool checked) {
+    QString inputUrl = ui->pushEdit->text().trimmed();
+    QString outputUrl = ui->pushEdit_2->text().trimmed();
+
+    if (inputUrl.isEmpty() || outputUrl.isEmpty()) {
+        QMessageBox::warning(this, "Error", "URL不能为空！");
+        ui->pushstreamButton->setChecked(false); // 恢复按钮状态
+        return;
+    }
+
+    if (checked) {
+        // 按钮被按下（开始推流）
+        mPlayer->startPushing(inputUrl, outputUrl);
+        ui->pushstreamButton->setText("停止推流");  // 更新按钮文字
+    } else {
+        // 按钮弹起（停止推流）
+        mPlayer->stopPushing();
+        ui->pushstreamButton->setText("开始推流");  // 恢复按钮文字
+    }
+}
+
+void MainWindow::onPushButtonReset() {
+    if (ui->pushstreamButton->isChecked()) {
+        ui->pushstreamButton->setChecked(false); // 强制复位按钮
+        ui->pushstreamButton->setText("开始推流");
+        QMessageBox::warning(this, "Error", "推流异常终止！");
+    }
+}
+

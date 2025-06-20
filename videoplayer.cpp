@@ -1,11 +1,14 @@
 #include "videoplayer.h"
 #include <QAudioFormat>
 #include <QDebug>
+#include <QFileInfo>
+#include <QTimer>
+#include <QCoreApplication>
 
 VideoPlayer::VideoPlayer(QObject *parent)
     : QThread(parent), mStopRequested(false),
       mAudioOutput(nullptr), mAudioIO(nullptr),
-      mSwrCtx(nullptr), mDstSampleFmt(AV_SAMPLE_FMT_S16)
+      mSwrCtx(nullptr), mDstSampleFmt(AV_SAMPLE_FMT_S16),mIsPushing(false)
 {
     avformat_network_init();
     av_register_all();
@@ -108,6 +111,12 @@ void VideoPlayer::processAudioPacket(AVCodecContext *audioCodecCtx, AVPacket *pa
     av_frame_free(&frame);
 }
 
+// videoplayer.cpp
+void VideoPlayer::setStreamUrl(const QString &url) {
+    QMutexLocker locker(&mStopMutex);
+    mStreamUrl = url;
+}
+
 void VideoPlayer::run()
 {
     AVFormatContext *pFormatCtx = nullptr;
@@ -125,14 +134,16 @@ void VideoPlayer::run()
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
     av_dict_set(&options, "max_delay", "100", 0);
 
-    const char *url = "rtsp://localhost:8554/mystream";
+    //const char *url = mStreamUrl.toUtf8().constData();
+    QByteArray urlData = mStreamUrl.toUtf8();
+    char *url = strdup(urlData.constData()); // 动态分配内存
     if (avformat_open_input(&pFormatCtx, url, nullptr, &options) < 0) {
-        qDebug() << "Could not open input stream";
+        emit sig_StreamError(QString("Failed to open stream: %1").arg(mStreamUrl));
         return;
     }
 
     if (avformat_find_stream_info(pFormatCtx, nullptr) < 0) {
-        qDebug() << "Could not find stream information";
+        emit sig_StreamError("No valid video or audio stream found");
         avformat_close_input(&pFormatCtx);
         return;
     }
@@ -234,4 +245,144 @@ void VideoPlayer::run()
     if (pAudioCodecCtx) avcodec_close(pAudioCodecCtx);
     cleanupAudio();
     if (pFormatCtx) avformat_close_input(&pFormatCtx);
+}
+
+// videoplayer.cpp
+void VideoPlayer::startPushing(const QString &inputUrl, const QString &outputUrl) {
+    // 确保在主线程执行
+    Q_ASSERT(QThread::currentThread() == QCoreApplication::instance()->thread());
+
+    // 安全终止现有进程
+    if (mFFmpegProcess) {
+        disconnect(mFFmpegProcess, nullptr, this, nullptr); // 断开所有信号连接
+        if (mFFmpegProcess->state() == QProcess::Running) {
+            mFFmpegProcess->terminate();
+            if (!mFFmpegProcess->waitForFinished(1000)) {
+                mFFmpegProcess->kill();
+                mFFmpegProcess->waitForFinished();
+            }
+        }
+        mFFmpegProcess->deleteLater(); // 安全删除
+        mFFmpegProcess = nullptr;
+    }
+
+    try {
+        mFFmpegProcess = new QProcess(this);
+        mIsPushing = true;
+
+        // 设置进程环境（可选）
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert("FFREPORT", "file=ffmpeg_log.txt:level=32"); // 生成详细日志
+        mFFmpegProcess->setProcessEnvironment(env);
+
+        // 合并标准输出和错误输出
+        mFFmpegProcess->setProcessChannelMode(QProcess::MergedChannels);
+
+        // 实时输出日志
+        connect(mFFmpegProcess, &QProcess::readyReadStandardOutput, this, [this]() {
+            QString output = QString::fromLocal8Bit(mFFmpegProcess->readAllStandardOutput());
+            emit sig_PushStatus(output.trimmed());
+        });
+
+        // 进程结束处理（自动重启逻辑）
+        connect(mFFmpegProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, inputUrl, outputUrl](int code, QProcess::ExitStatus status) {
+                mIsPushing = false;
+                QString exitMsg = QString("推流进程结束，代码: %1").arg(code);
+                emit sig_PushStatus(exitMsg);
+
+                // 正常退出不重启（0表示成功退出）
+                if (code == 0) return;
+
+                // 异常退出时自动重启
+                emit sig_PushStatus("检测到异常中断，3秒后尝试重启...");
+                QTimer::singleShot(3000, this, [this, inputUrl, outputUrl]() {
+                    if (!mIsPushing) { // 防止重复启动
+                        startPushing(inputUrl, outputUrl);
+                    }
+                });
+            });
+
+        // 构建FFmpeg参数
+        QStringList args;
+        bool isCameraInput = inputUrl.contains("Camera", Qt::CaseInsensitive) ||
+                            inputUrl.contains("CAM", Qt::CaseInsensitive) ||
+                            inputUrl.contains("USB", Qt::CaseInsensitive) ||
+                            !QFileInfo(inputUrl).exists();
+
+        if (isCameraInput) {
+            // 摄像头设备参数
+            args << "-f" << "dshow"
+                 << "-thread_queue_size" << "512"  // 增加线程队列大小
+                 << "-i" << "video=" + inputUrl
+                 << "-vcodec" << "libx264"
+                 << "-preset:v" << "medium"
+                 << "-tune:v" << "zerolatency"
+                 << "-g" << "60"
+                 << "-r" << "30"
+                 << "-b:v" << "2M"
+                 << "-bufsize" << "4M"  // 增加缓冲区
+                 << "-maxrate" << "2M"
+                 << "-rtsp_transport" << "tcp"
+                 << "-reconnect" << "1"
+                 << "-reconnect_at_eof" << "1"
+                 << "-reconnect_streamed" << "1"
+                 << "-reconnect_delay_max" << "5"
+                 << "-timeout" << "5000000"
+                 << "-muxdelay" << "0.5"
+                 << "-loglevel" << "warning";  // 减少不必要的日志
+        } else {
+            // 文件输入参数
+            args << "-re"
+                 << "-stream_loop" << "-1"
+                 << "-i" << inputUrl
+                 << "-c" << "copy"
+                 << "-rtsp_transport" << "tcp"
+                 << "-fflags" << "+genpts"
+                 << "-loglevel" << "warning";
+        }
+        args << "-f" << "rtsp" << outputUrl;
+
+        emit sig_PushStatus(QString("启动推流命令: ffmpeg %1").arg(args.join(" ")));
+
+        // 启动进程
+        mFFmpegProcess->start("ffmpeg", args);
+
+        // 检查是否成功启动
+        if (!mFFmpegProcess->waitForStarted(3000)) {
+            emit sig_PushStatus("启动FFmpeg失败");
+            mFFmpegProcess->deleteLater();
+            mFFmpegProcess = nullptr;
+            mIsPushing = false;
+        }
+
+    } catch (const std::exception& e) {
+        qCritical() << "Exception in startPushing:" << e.what();
+        if (mFFmpegProcess) {
+            mFFmpegProcess->deleteLater();
+            mFFmpegProcess = nullptr;
+        }
+        mIsPushing = false;
+        emit sig_PushStatus(QString("发生异常: %1").arg(e.what()));
+    } catch (...) {
+        qCritical() << "Unknown exception in startPushing";
+        if (mFFmpegProcess) {
+            mFFmpegProcess->deleteLater();
+            mFFmpegProcess = nullptr;
+        }
+        mIsPushing = false;
+        emit sig_PushStatus("发生未知异常");
+    }
+}
+
+// 停止推流的函数
+void VideoPlayer::stopPushing() {
+    if (mFFmpegProcess && mFFmpegProcess->state() == QProcess::Running) {
+        // 先尝试正常终止
+        mFFmpegProcess->terminate();
+        if (!mFFmpegProcess->waitForFinished(1000)) {
+            mFFmpegProcess->kill();
+        }
+    }
+    mIsPushing = false;
 }
