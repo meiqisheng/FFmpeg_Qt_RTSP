@@ -18,13 +18,16 @@
 #include<iostream>
 using namespace std;
 
+#define APP_VERSION "1.0.0"
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
    ui(new Ui::MainWindow)
 { 
 	
     ui->setupUi(this);
-
+    QString title = QString("RTSP tool - Version %1, build:%2-%3").arg(APP_VERSION).arg(__DATE__).arg(__TIME__);
+    this->setWindowTitle(title);
     mPlayer = new VideoPlayer;
     this->setWindowFlags(Qt::Widget | Qt::MSWindowsFixedSizeDialogHint);
     connect(mPlayer, &VideoPlayer::sig_GetOneFrame, this, &MainWindow::slotGetOneFrame);
