@@ -140,8 +140,7 @@ void MainWindow::updateVideoLabel()
 // 新增槽函数
 // 修改拉流按钮的槽函数
 // 修改后的槽函数
-void MainWindow::onPullStreamClicked(bool checked)
-{
+void MainWindow::onPullStreamClicked(bool checked) {
     if (checked) {
         // 开始拉流
         QString rtspUrl = ui->pullEdit->text().trimmed();
@@ -150,6 +149,9 @@ void MainWindow::onPullStreamClicked(bool checked)
             ui->pullstreamButton->setChecked(false);
             return;
         }
+
+        // 禁用相关输入框
+        ui->pullEdit->setEnabled(false);       // 禁用拉流输入框
 
         // 获取用户选择的协议 (TCP/UDP)
         QString transport = ui->comboBox->currentText().toLower();
@@ -160,6 +162,7 @@ void MainWindow::onPullStreamClicked(bool checked)
         mPlayer->startPlay();
     } else {
         // 停止拉流
+        ui->pullEdit->setEnabled(true);        // 启用拉流输入框
         ui->pullstreamButton->setText("开始拉流");
         mPlayer->stopPlay();
     }
@@ -182,11 +185,15 @@ void MainWindow::on_pushstreamButton_clicked(bool checked) {
 
     if (checked) {
         // 按钮被按下（开始推流）
+        ui->pushEdit->setEnabled(false);       // 禁用输入框
+        ui->pushEdit_2->setEnabled(false);     // 禁用输入框
         mPlayer->startPushing(inputUrl, outputUrl);
         ui->pushstreamButton->setText("停止推流");  // 更新按钮文字
     } else {
         // 按钮弹起（停止推流）
         mPlayer->stopPushing();
+        ui->pushEdit->setEnabled(true);        // 启用输入框
+        ui->pushEdit_2->setEnabled(true);      // 启用输入框
         ui->pushstreamButton->setText("开始推流");  // 恢复按钮文字
     }
 }
@@ -196,6 +203,9 @@ void MainWindow::onPushButtonReset() {
         ui->pushstreamButton->setChecked(false); // 强制复位按钮
         ui->pushstreamButton->setText("开始推流");
         QMessageBox::warning(this, "Error", "推流异常终止！");
+        ui->pushEdit->setEnabled(true);        // 启用输入框
+        ui->pushEdit_2->setEnabled(true);      // 启用输入框
+        ui->pullEdit->setEnabled(true);        // 启用拉流输入框
     }
 }
 

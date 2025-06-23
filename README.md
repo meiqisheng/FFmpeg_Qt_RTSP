@@ -11,7 +11,7 @@
 ![demo](./黄油.gif) <!-- 放置你的视频或波形演示动图 -->
 
 ---
-![demo2](./output1.gif) <!-- 放置你的视频或波形演示动图 -->
+![demo2](./output.gif) <!-- 放置你的视频或波形演示动图 -->
 
 ## 📡 Public RTSP Test Streams (Verified)
 

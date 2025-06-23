@@ -317,7 +317,7 @@ void VideoPlayer::startPushing(const QString &inputUrl, const QString &outputUrl
         if (isCameraInput) {
             // 摄像头设备参数
             args << "-f" << "dshow"
-                 << "-thread_queue_size" << "512"  // 增加线程队列大小
+                 << "-thread_queue_size" << "64"  // 增加线程队列大小
                  << "-i" << "video=" + inputUrl
                  << "-vcodec" << "libx264"
                  << "-preset:v" << "medium"
